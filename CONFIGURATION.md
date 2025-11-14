@@ -122,11 +122,11 @@ BACNET_NAME=Sentinel
 BACnet device instance number (must be unique on network).
 
 - **Range:** 0 to 4194303
-- **Default:** `999`
+- **Default:** `708114`
 - **Example:** `1001`
 
 ```bash
-BACNET_INSTANCE=999
+BACNET_INSTANCE=708114
 ```
 
 **Important:** Each BACnet device on the network must have a unique instance number.

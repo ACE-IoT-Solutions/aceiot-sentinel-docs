@@ -278,7 +278,7 @@ docker-compose up -d
 **Solution:**
 ```bash
 # Change Sentinel instance number
-BACNET_INSTANCE=999  # Use unique number
+BACNET_INSTANCE=708114  # Use unique number
 ```
 
 ---
