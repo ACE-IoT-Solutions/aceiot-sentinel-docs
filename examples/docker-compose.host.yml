@@ -1,0 +1,52 @@
+version: '3.8'
+
+# Host Network Mode (Default)
+# This is the simplest deployment mode where the container shares
+# the host's network stack. Good for development and testing.
+#
+# Advantages:
+# - Simple setup
+# - BACnet broadcasts work automatically
+# - Easy access to services
+#
+# Limitations:
+# - Shares network namespace with host
+# - Possible port conflicts (5000, 22917)
+# - Less isolation
+#
+# Usage:
+# 1. Copy .env.example to .env and configure BACNET_ADDRESS
+# 2. Run: docker-compose -f docker-compose.host.yml up -d
+# 3. Access web UI at http://localhost:5000
+
+services:
+  sentinel:
+    image: ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
+    container_name: aceiot-sentinel
+
+    # Use host network mode to allow BACnet/IP communication
+    # This is required for BACnet broadcast discovery
+    network_mode: host
+
+    env_file:
+      - .env
+
+    volumes:
+      # Persist agent data
+      - volttron-data:/home/volttron/.aceiot-sentinel-volttron
+
+      # Optional: mount custom certificates
+      # - ./certs:/certs:ro
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  volttron-data:
+    driver: local

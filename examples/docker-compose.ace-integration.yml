@@ -1,0 +1,100 @@
+version: '3.8'
+
+# ACE IoT Manager Integration Example
+# This example shows full integration with ACE IoT Manager platform
+# for centralized configuration, JWT rotation, and data upload.
+#
+# Prerequisites:
+# 1. ACE IoT Manager account and API access
+# 2. JWT token from ACE Manager
+# 3. MACVLAN network created (see docker-compose.macvlan.yml)
+#
+# Usage:
+# 1. Update the ACE_CONFIG_* variables below with your credentials
+# 2. Run: docker-compose -f docker-compose.ace-integration.yml up -d
+
+networks:
+  macvlan:
+    external: true
+    name: sentinel-macvlan
+
+services:
+  sentinel:
+    image: ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
+    container_name: aceiot-sentinel
+
+    networks:
+      macvlan:
+        # CHANGE THIS: Set your static IP
+        ipv4_address: 192.168.1.150
+
+    environment:
+      # BACnet Configuration
+      BACNET_ADDRESS: 192.168.1.150/24:47808
+      BACNET_NAME: "Building A Sentinel"
+      BACNET_INSTANCE: 1001
+      BACNET_VENDOR_ID: 1318
+
+      # VOLTTRON Configuration
+      VOLTTRON_INSTANCE_NAME: building-a-sentinel
+
+      # Web UI Configuration
+      WEBAPP_ENABLED: true
+      WEBAPP_PORT: 5000
+      # Optional: Enable HTTPS
+      # WEBAPP_CERTFILE: /certs/cert.pem
+      # WEBAPP_KEYFILE: /certs/key.pem
+
+      # Scanning Configuration
+      SCAN_INTERVAL_SECS: 86400  # Daily scans
+      LOW_LIMIT: 0
+      HIGH_LIMIT: 4194303
+
+      # ACE Config Agent Integration (REQUIRED)
+      ACE_CONFIG_ENABLED: true
+
+      # CHANGE THESE: Your ACE Manager credentials
+      ACE_CONFIG_URL: https://manage.aceiot.cloud
+      ACE_CONFIG_JWT: your-jwt-token-here
+      ACE_CONFIG_GATEWAY: building-a-sentinel
+
+      # Optional: Multi-tenant configuration
+      # ACE_CONFIG_CLIENT: your-client-id
+      # ACE_CONFIG_SITE: headquarters
+
+      # How often to check for config updates (seconds)
+      ACE_CONFIG_POLL_INTERVAL: 60
+
+      # Cloud Upload (automatically configured via ACE Config Agent)
+      CLOUD_UPLOAD_ENABLED: true
+      # CLOUD_UPLOAD_URL is automatically set from ACE_CONFIG_URL
+      # JWT is automatically retrieved and rotated by ACE Config Agent
+      CLOUD_UPLOAD_INTERVAL: 86400  # Upload daily
+
+    volumes:
+      # Persist VOLTTRON data
+      - volttron-data:/home/volttron/.aceiot-sentinel-volttron
+
+      # Optional: Mount SSL certificates for HTTPS web UI
+      # - ./certs:/certs:ro
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  volttron-data:
+    driver: local
+
+# Benefits of ACE Manager Integration:
+# 1. Automatic JWT rotation (no manual token updates)
+# 2. Centralized configuration management
+# 3. Automatic data upload to ACE platform
+# 4. Gateway health monitoring
+# 5. Remote configuration updates
+# 6. Multi-site management

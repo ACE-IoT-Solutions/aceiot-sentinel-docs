@@ -1,0 +1,158 @@
+version: '3.8'
+
+# Multiple Sentinel Containers on MACVLAN
+# Deploy multiple sentinel containers on the same network,
+# each monitoring different BACnet device ranges or subnets.
+#
+# Prerequisites:
+# 1. Create MACVLAN network:
+#    docker network create -d macvlan \
+#      --subnet=192.168.1.0/24 \
+#      --gateway=192.168.1.1 \
+#      --ip-range=192.168.1.200/29 \
+#      -o parent=eth0 \
+#      bacnet-network
+#
+# 2. Ensure each container has:
+#    - Unique IP address
+#    - Unique BACnet instance number
+#    - Unique container name
+#    - Unique volume name
+#
+# 3. Run: docker-compose -f docker-compose.multi.yml up -d
+
+networks:
+  bacnet:
+    external: true
+    name: bacnet-network
+
+services:
+  # First Sentinel - Building A
+  sentinel-building-a:
+    image: ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
+    container_name: sentinel-building-a
+
+    networks:
+      bacnet:
+        ipv4_address: 192.168.1.200
+
+    environment:
+      BACNET_ADDRESS: 192.168.1.200/24:47808
+      BACNET_NAME: "Building A Sentinel"
+      BACNET_INSTANCE: 1001
+      VOLTTRON_INSTANCE_NAME: sentinel-building-a
+      WEBAPP_PORT: 5000
+
+      # Scan specific device range
+      LOW_LIMIT: 0
+      HIGH_LIMIT: 1000
+      SCAN_INTERVAL_SECS: 86400
+
+      # ACE Manager Integration
+      ACE_CONFIG_ENABLED: false
+      # ACE_CONFIG_URL: https://manage.aceiot.cloud
+      # ACE_CONFIG_JWT: your-jwt-token
+      # ACE_CONFIG_GATEWAY: building-a-sentinel
+
+    volumes:
+      - sentinel-a-data:/home/volttron/.aceiot-sentinel-volttron
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Second Sentinel - Building B
+  sentinel-building-b:
+    image: ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
+    container_name: sentinel-building-b
+
+    networks:
+      bacnet:
+        ipv4_address: 192.168.1.201
+
+    environment:
+      BACNET_ADDRESS: 192.168.1.201/24:47808
+      BACNET_NAME: "Building B Sentinel"
+      BACNET_INSTANCE: 1002
+      VOLTTRON_INSTANCE_NAME: sentinel-building-b
+      WEBAPP_PORT: 5000
+
+      # Scan different device range
+      LOW_LIMIT: 1001
+      HIGH_LIMIT: 2000
+      SCAN_INTERVAL_SECS: 86400
+
+      # ACE Manager Integration
+      ACE_CONFIG_ENABLED: false
+      # ACE_CONFIG_URL: https://manage.aceiot.cloud
+      # ACE_CONFIG_JWT: your-jwt-token
+      # ACE_CONFIG_GATEWAY: building-b-sentinel
+
+    volumes:
+      - sentinel-b-data:/home/volttron/.aceiot-sentinel-volttron
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Third Sentinel - Campus Core
+  sentinel-campus-core:
+    image: ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
+    container_name: sentinel-campus-core
+
+    networks:
+      bacnet:
+        ipv4_address: 192.168.1.202
+
+    environment:
+      BACNET_ADDRESS: 192.168.1.202/24:47808
+      BACNET_NAME: "Campus Core Sentinel"
+      BACNET_INSTANCE: 1003
+      VOLTTRON_INSTANCE_NAME: sentinel-campus-core
+      WEBAPP_PORT: 5000
+
+      # Scan remaining devices
+      LOW_LIMIT: 2001
+      HIGH_LIMIT: 4194303
+      SCAN_INTERVAL_SECS: 86400
+
+      # ACE Manager Integration
+      ACE_CONFIG_ENABLED: false
+      # ACE_CONFIG_URL: https://manage.aceiot.cloud
+      # ACE_CONFIG_JWT: your-jwt-token
+      # ACE_CONFIG_GATEWAY: campus-core-sentinel
+
+    volumes:
+      - sentinel-core-data:/home/volttron/.aceiot-sentinel-volttron
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  sentinel-a-data:
+    driver: local
+  sentinel-b-data:
+    driver: local
+  sentinel-core-data:
+    driver: local
+
+# Access each web UI:
+# Building A: http://192.168.1.200:5000
+# Building B: http://192.168.1.201:5000
+# Campus Core: http://192.168.1.202:5000
