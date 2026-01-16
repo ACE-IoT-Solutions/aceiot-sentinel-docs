@@ -21,11 +21,23 @@ Complete reference for all ACE IoT Sentinel Container environment variables.
 
 The BACnet/IP address this container will use to communicate on the network.
 
-- **Format:** `IP/CIDR:PORT`
+- **Format:** `auto`, `IP`, `IP/CIDR`, or `IP/CIDR:PORT`
 - **Default:** None (must be set)
-- **Example:** `192.168.1.100/24:47808`
+- **Example:** `192.168.1.100/24:47808` or `auto`
+
+**Options:**
+
+| Value | Description | Use Case |
+|-------|-------------|----------|
+| `auto` | Auto-detect container IP | Bridge networks, development |
+| `192.168.1.100` | Explicit IP (adds /24:47808) | Simple host mode |
+| `192.168.1.100/24` | IP with CIDR (adds :47808) | Custom subnet |
+| `192.168.1.100/24:47808` | Full specification | Production, custom port |
 
 ```bash
+# Auto-detect (recommended for bridge networks)
+BACNET_ADDRESS=auto
+
 # Standard BACnet/IP on network 192.168.1.0/24
 BACNET_ADDRESS=192.168.1.100/24:47808
 
@@ -36,7 +48,26 @@ BACNET_ADDRESS=10.0.50.25/16:47808
 BACNET_ADDRESS=192.168.1.100/24:47809
 ```
 
+**When to use each option:**
+- **Bridge networks:** Use `auto` - the container detects its own IP
+- **Host mode:** Set to your host machine's IP address
+- **MACVLAN/IPVLAN:** Set to match your container's static IP assignment
+- **Network namespace (Iotium, edge platforms):** Set to the assigned namespace IP
+
 **Important:** This IP must be on the same network as your BACnet devices for discovery to work.
+
+### BACNET_PORT
+
+BACnet/IP port number.
+
+- **Default:** `47808` (standard BACnet/IP port)
+- **Range:** 1024 to 65535
+
+```bash
+BACNET_PORT=47808
+```
+
+**Note:** Only change this if your network uses a non-standard BACnet port.
 
 ---
 

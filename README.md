@@ -57,9 +57,10 @@ http://localhost:5000
 
 📚 **Configuration**
 - [Configuration Reference](./CONFIGURATION.md) - Complete guide to all environment variables
-- [Network Configuration](./NETWORKING.md) - Host, MACVLAN, and IPVLAN networking modes
+- [Network Configuration](./NETWORKING.md) - Bridge, Host, MACVLAN, and IPVLAN networking modes
 
 📚 **Deployment Scenarios**
+- [Bridge Network](./examples/docker-compose.bridge.yml) - Container-to-container with auto-IP detection
 - [Host Network Mode](./examples/docker-compose.host.yml) - Simple deployment (default)
 - [MACVLAN Network](./examples/docker-compose.macvlan.yml) - Production deployment with isolated IP
 - [IPVLAN L2 Network](./examples/docker-compose.ipvlan-l2.yml) - Alternative to MACVLAN
@@ -95,20 +96,23 @@ docker run -d \
 
 ## Required Configuration
 
-The only **required** configuration is `BACNET_ADDRESS`. This must be set to an IP address on your BACnet network.
+The only **required** configuration is `BACNET_ADDRESS`. This can be set to `auto` for bridge networks or an explicit IP for other deployment modes.
 
-**Format:** `IP/CIDR:PORT`
+**Format:** `auto`, `IP`, `IP/CIDR`, or `IP/CIDR:PORT`
 
 **Examples:**
 ```bash
+# Auto-detect (recommended for bridge networks)
+BACNET_ADDRESS=auto
+
 # Standard BACnet/IP on network 192.168.1.0/24
 BACNET_ADDRESS=192.168.1.100/24:47808
 
 # Different subnet
 BACNET_ADDRESS=10.0.50.25/16:47808
 
-# Custom port
-BACNET_ADDRESS=192.168.1.100/24:47809
+# Network namespace deployment (Iotium, edge platforms)
+BACNET_ADDRESS=192.168.1.206/24:47808
 ```
 
 See [CONFIGURATION.md](./CONFIGURATION.md) for all available options.
