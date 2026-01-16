@@ -2,27 +2,107 @@
 
 This guide covers different networking modes for the Sentinel Container, with a focus on production deployments requiring BACnet/IP functionality.
 
+## Quick Start
+
+Run the interactive network setup wizard:
+
+```bash
+make network
+# or directly:
+./scripts/setup-network.sh
+```
+
+This will guide you through choosing and configuring the right network mode for your deployment.
+
 ## Overview
 
-BACnet/IP requires broadcast UDP packets, which means the container needs direct access to the physical network. This guide covers three networking approaches:
+The Sentinel Container supports multiple networking modes to accommodate different deployment scenarios:
 
-1. **Host Networking** - Simplest, shares host network stack
-2. **MACVLAN** - Gives container its own MAC address (recommended)
-3. **IPVLAN** - Gives container its own IP without separate MAC
+1. **Bridge Networking** - Container-to-container communication with auto-IP detection
+2. **Host Networking** - Simplest, shares host network stack
+3. **MACVLAN** - Gives container its own MAC address (recommended for production BACnet)
+4. **IPVLAN L2** - Gives container its own IP without separate MAC
 
 ## Quick Comparison
 
-| Feature | Host Mode | MACVLAN | IPVLAN L2 | IPVLAN L3 |
-|---------|-----------|---------|-----------|-----------|
-| Setup Complexity | Easy | Medium | Medium | Hard |
-| Container Isolation | None | Full | Full | Full |
-| Host-Container Communication | ✅ | ❌* | ❌* | ✅ |
-| BACnet Broadcast Support | ✅ | ✅ | ✅ | ❌ |
-| MAC Address Limits | N/A | May hit switch limits | No limits | No limits |
-| Port Conflicts | Possible | None | None | None |
-| Production Ready | ⚠️ | ✅ | ✅ | ❌ |
+| Feature | Bridge | Host Mode | MACVLAN | IPVLAN L2 |
+|---------|--------|-----------|---------|-----------|
+| Setup Complexity | Easiest | Easy | Medium | Medium |
+| Container-to-Container | ✅ Yes | ✅ Yes | ❌ No* | ❌ No* |
+| External BACnet Access | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
+| IP Auto-Detection | ✅ Yes | ❌ No | ❌ No | ❌ No |
+| Container Isolation | Partial | None | Full | Full |
+| Port Conflicts | None | Possible | None | None |
+| Best For | Dev/Orchestration | Quick testing | Production | MAC-limited networks |
 
-*Requires additional bridge configuration
+*MACVLAN/IPVLAN containers are isolated from the host and other containers on different networks
+
+## Bridge Networking (Container-to-Container)
+
+### When to Use
+- Running Sentinel alongside other containers (databases, APIs, etc.)
+- Development and testing environments
+- Container orchestration scenarios (Kubernetes, Docker Swarm)
+- When external BACnet device access is NOT required
+
+### Key Features
+- **Auto-IP detection**: Set `BACNET_ADDRESS=auto` and the container detects its own IP
+- **Container DNS**: Access other containers by name
+- **Port mapping**: Expose services to the host via port mapping
+
+### Setup
+
+```bash
+# Option 1: Use the interactive setup
+make network
+# Select "Bridge" option
+
+# Option 2: Use the example compose file directly
+cp docker-compose.bridge.yml.example docker-compose.yml
+docker-compose up -d
+```
+
+### Docker Compose with Bridge
+
+```yaml
+version: '3.8'
+
+networks:
+  sentinel-network:
+    driver: bridge
+
+services:
+  sentinel:
+    image: ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
+    container_name: aceiot-sentinel
+    networks:
+      - sentinel-network
+    ports:
+      - "5000:5000"
+      - "47808:47808/udp"
+    environment:
+      # Auto-detect container IP
+      BACNET_ADDRESS: auto
+    volumes:
+      - volttron-data:/home/volttron/.aceiot-sentinel-volttron
+
+  # Other containers can communicate with Sentinel by name
+  my-api:
+    image: my-api:latest
+    networks:
+      - sentinel-network
+    environment:
+      SENTINEL_URL: http://aceiot-sentinel:5000
+
+volumes:
+  volttron-data:
+```
+
+### Accessing from Host
+
+With bridge networking, access the container via the mapped ports:
+- Web UI: http://localhost:5000
+- BACnet: localhost:47808 (UDP)
 
 ## Host Networking (Default)
 
@@ -42,16 +122,55 @@ BACnet/IP requires broadcast UDP packets, which means the container needs direct
 # Docker
 docker run -e BACNET_ADDRESS=192.168.1.100/24:47808 \
   --network host \
-  ghcr.io/acedrew/aceiot-sentinel:latest
+  ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
 
 # Podman
 podman run -e BACNET_ADDRESS=192.168.1.100/24:47808 \
   --network host \
-  ghcr.io/acedrew/aceiot-sentinel:latest
+  ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
 
 # Docker Compose (default in docker-compose.yml)
 docker-compose up -d
 ```
+
+## Network Namespace Deployments (Iotium, Edge Platforms)
+
+For deployments using isolated network namespaces (common in edge orchestration platforms like Iotium):
+
+```json
+{
+  "name": "aceiot",
+  "networks": [{
+    "is_default": true,
+    "ip_address": "192.168.1.206",
+    "network_id": "n-72adeebb620091a5",
+    "mac_address": "60:84:3B:F0:00:41"
+  }],
+  "services": [{
+    "name": "aceiot",
+    "image": {
+      "name": "ghcr.io/ace-iot-solutions/aceiot-sentinel",
+      "version": "latest"
+    },
+    "docker": {
+      "environment_vars": {
+        "HIGH_LIMIT": "40000",
+        "BACNET_ADDRESS": "192.168.1.206/24:47808",
+        "SCAN_INTERVAL_SECS": "600"
+      }
+    }
+  }],
+  "volumes": [{
+    "name": "volttron-data",
+    "host_path": "/opt/aceiot-data"
+  }]
+}
+```
+
+**Key configuration:**
+- Set `BACNET_ADDRESS` explicitly to match the assigned network namespace IP
+- Mount a persistent volume for `/home/volttron/.aceiot-sentinel-volttron`
+- The container supports both fresh starts and restarts with persistent data
 
 ## MACVLAN Networking (Recommended for Production)
 
@@ -104,7 +223,7 @@ docker run -d \
   --network sentinel-macvlan \
   --ip 192.168.1.150 \
   -e BACNET_ADDRESS=192.168.1.150/24:47808 \
-  ghcr.io/acedrew/aceiot-sentinel:latest
+  ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
 ```
 
 ### Docker Compose with MACVLAN
@@ -126,7 +245,7 @@ networks:
 
 services:
   sentinel:
-    image: ghcr.io/acedrew/aceiot-sentinel:latest
+    image: ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
     container_name: aceiot-sentinel
     networks:
       macvlan:
@@ -188,7 +307,7 @@ docker run -d \
   --network sentinel-ipvlan-l2 \
   --ip 192.168.1.150 \
   -e BACNET_ADDRESS=192.168.1.150/24:47808 \
-  ghcr.io/acedrew/aceiot-sentinel:latest
+  ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
 ```
 
 #### Docker Compose
@@ -211,7 +330,7 @@ networks:
 
 services:
   sentinel:
-    image: ghcr.io/acedrew/aceiot-sentinel:latest
+    image: ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
     container_name: aceiot-sentinel
     networks:
       ipvlan:
@@ -319,7 +438,7 @@ docker run -d \
   -e BACNET_INSTANCE=1001 \
   -v sentinel-a-data:/home/volttron/.aceiot-sentinel-volttron \
   --restart unless-stopped \
-  ghcr.io/acedrew/aceiot-sentinel:latest
+  ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
 
 # 3. Verify
 docker logs sentinel-building-a
@@ -335,7 +454,7 @@ docker run -d \
   -e BACNET_INSTANCE=1002 \
   -v sentinel-b-data:/home/volttron/.aceiot-sentinel-volttron \
   --restart unless-stopped \
-  ghcr.io/acedrew/aceiot-sentinel:latest
+  ghcr.io/ace-iot-solutions/aceiot-sentinel:latest
 ```
 
 ## References

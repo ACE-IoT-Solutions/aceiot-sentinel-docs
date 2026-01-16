@@ -86,6 +86,49 @@ docker-compose down -v
 docker-compose up -d
 ```
 
+### Container Restart Issues (Persistent Volumes)
+
+The container is designed to handle restarts with persistent volumes. On each startup, it:
+- Cleans up stale runtime state (sockets, locks, PIDs)
+- Stops and removes existing agents
+- Reinstalls agents with fresh configuration
+
+**Symptom:** Grasshopper UI doesn't come up after restart
+
+**Check logs:**
+```bash
+docker logs aceiot-sentinel
+```
+
+**Look for:**
+- "VOLTTRON platform is ready (vctl responding)" - confirms VOLTTRON started
+- "Checking for existing grasshopper agent..." - cleanup in progress
+- "grasshopper agent installed successfully" - fresh install completed
+
+**If you see "Identity already exists" errors:**
+- This is now handled automatically
+- The entrypoint removes and reinstalls agents on each start
+- If issues persist, clear the volume:
+  ```bash
+  docker-compose down -v
+  docker-compose up -d
+  ```
+
+**Diagnostic commands:**
+```bash
+# Check agent status
+docker exec aceiot-sentinel vctl status
+
+# Check what's listening on ports
+docker exec aceiot-sentinel netstat -tlnp | grep -E "5000|47808"
+
+# Check VOLTTRON logs for errors
+docker exec aceiot-sentinel tail -100 /tmp/volttron.log
+
+# Check if web UI is responding
+docker exec aceiot-sentinel curl -s http://localhost:5000/ | head -20
+```
+
 ### Cannot Access Container Shell
 
 **Symptom:** `docker exec` fails
